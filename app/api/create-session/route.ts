@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs'; // 👈 MUY IMPORTANTE
 
-export const runtime = 'nodejs'; // ⚠️ SIN ESTO, NO FUNCIONA req.json()
-
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const data = await req.json();
-    console.log("📦 Body recibido:", data);
-    return NextResponse.json({ recibido: data });
+    const body = await request.json();
+    console.log("📦 Body recibido:", body);
+    return new Response(JSON.stringify({ recibido: body }), {
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (error: any) {
-    console.error("❌ Error leyendo el body:", error.message);
-    return NextResponse.json({ error: "No se pudo leer el cuerpo de la petición" }, { status: 400 });
+    console.error("❌ Error leyendo body:", error.message);
+    return new Response(JSON.stringify({ error: "No se pudo leer el cuerpo de la petición" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
