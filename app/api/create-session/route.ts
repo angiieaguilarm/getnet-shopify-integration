@@ -10,3 +10,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No se pudo leer el cuerpo de la petición" }, { status: 400 });
   }
 }
+
+export const config = {
+  api: {
+    bodyParser: true,
+  },
+};
