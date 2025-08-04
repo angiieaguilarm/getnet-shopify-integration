@@ -1,0 +1,1167 @@
+openapi: 3.0.0
+info:
+  title: Checkout Web Based
+  contact: {}
+  version: '1.0.0'
+  description: "This API implements the Checkout functionalities used by Checkout Web Based integrations. \n\nThis API allows Checkout Web Based users to view information about the required and optional request body fields and response body fields used by supported operations.\n\nWith a Checkout Web Based integration, you can:\n\n- **Create a payment intent**, which is required before Checkout Web Based can be loaded for a customer.\n\n- **Cancel or refund specific payments**, from an ID obtained from the Checkout product webhook solution."
+servers:
+  - url: https://api-sbx.pre.globalgetnet.com/digital-checkout/v1
+  - url: https://api.pre.globalgetnet.com/digital-checkout/v1
+  - url: https://api.globalgetnet.com/digital-checkout/v1
+paths:
+  /payment-intent:
+    post:
+      security:
+        - PROD:
+          - "digital-payments:checkout:custom:rw"
+        - PRE:
+          - "digital-payments:checkout:custom:rw"
+      tags:
+        - Payment intent
+      summary: "Creates a payment intent."
+      description: "Creates a payment intent from an e-commerce checkout."
+      operationId: postPaymentIntent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: "Data structure containing request details for creating a payment intent"
+              oneOf:
+                - $ref: '#/components/schemas/CreatePaymentIntentCheckout'
+              discriminator:
+                propertyName: mode
+        description: "Data structure containing request details for creating a payment intent.\n\nThe final amount for payment will be the sum of the `amount` and `shipping.shipping_amount` fields when the latter field contains a value.\n\nIn cases where installments are applied in the checkout interface, the above condition may be increased."
+      responses:
+        "201":
+          description: "Created.\n\nPayment intent created successfully."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentIntentResponseBody'
+        "400":
+          description: "Bad request.\n\nOnly required fields are validated."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestError"
+        "401":
+          description: "Unauthorized"
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedError"
+              examples:
+                  INVALID_API_KEY:
+                    $ref: "#/components/examples/invalid_api_key"
+                  INVALID_API_TOKEN:
+                    $ref: "#/components/examples/invalid_api_token"
+        "403":
+          description: "Forbidden"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                PRODUCT_NOT_ENABLED:
+                  $ref: '#/components/examples/checkout_product_not_enabled'
+        "404":
+          description: "Not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                SELLER_NOT_FOUND:
+                  $ref: "#/components/examples/seller_not_found"
+        "422":
+          description: "Unprocessable entity.\n\nPotential business error."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                AMOUNT_VALUE_INVALID:
+                  $ref: '#/components/examples/amount_value_invalid'
+                CHECKOUT_CONFIGURATION_NOT_FOUND:
+                  $ref: '#/components/examples/checkout_configuration_not_found'
+                CURRENCY_NOT_ALLOWED:
+                  $ref: '#/components/examples/currency_not_allowed'
+        "500":
+          description: "Internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+  /payments/{payment_id}/cancellation:
+    post:
+      security:
+        - PROD:
+          - "digital-payments:checkout:custom:rw"
+        - PRE:
+          - "digital-payments:checkout:custom:rw"
+      tags:
+        - Payment
+      summary: "Cancels a specific payment."
+      description: "Cancels a specific payment transaction by creating a new transaction to reverse the payment. A merchant can, for example, cancel a payment when they are unable to provide the product or service that has been paid for. The cancellation amount is always equal to the transaction amount.\n\nTo send this request, you must provide the payment ID of the transaction to be cancelled in the request path."
+      operationId: postPaymentsCancellation
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        "201":
+          description: "Created.\n\nPayment was cancelled."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponseCancellation'
+        "400":
+          description: "Bad request.\n\nOnly required fields are validated."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestError"
+        "401":
+          description: "Unauthorized"
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedError"
+              examples:
+                  INVALID_API_KEY:
+                    $ref: "#/components/examples/invalid_api_key"
+                  INVALID_API_TOKEN:
+                    $ref: "#/components/examples/invalid_api_token"
+        "404":
+          description: "Not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                SELLER_NOT_FOUND:
+                  $ref: "#/components/examples/seller_not_found"
+                PAYMENT_NOT_FOUND:
+                  $ref: "#/components/examples/payment_does_not_exist"
+        "422":
+          description: "Unprocessable entity.\n\nPotential business error."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                CANCELLING_WHEN_STATUS_DENIED:
+                  $ref: "#/components/examples/cancelling_when_status_denied"
+                CANCELLING_WHEN_STATUS_CANCELLED:
+                  $ref: "#/components/examples/cancelling_when_status_cancelled"
+        "500":
+          description: "Internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+  /payments/{payment_id}/refund:
+    post:
+      tags:
+        - Payment
+      summary: "Refunds a specific payment."
+      security:
+        - PROD:
+          - "digital-payments:checkout:custom:rw"
+        - PRE:
+          - "digital-payments:checkout:custom:rw"
+      description: "Refunds a specific payment transaction. Refunds can be used when the customer is unhappy with the product or service they received from the merchant. The refund amount must be less than or equal to the original payment amount.\n\nTo send this request, you must provide the payment ID of the transaction to be refunded in the request path."
+      operationId: postPaymentsRefund
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCPRefund'
+        description: "Data structure containing request details for refunding a payment"
+      responses:
+        "201":
+          description: "Created.\n\nPayment refunded successfully."
+          content:
+            application/json:
+              schema:
+                allOf:
+                 - $ref: '#/components/schemas/ResponseRefund'
+        "400":
+          description: "Bad request.\n\nOnly required fields are validated."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestError"
+        "401":
+          description: "Unauthorized"
+          content:
+            text/plain:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedError"
+              examples:
+                  INVALID_API_KEY:
+                    $ref: "#/components/examples/invalid_api_key"
+                  INVALID_API_TOKEN:
+                    $ref: "#/components/examples/invalid_api_token"
+        "404":
+          description: "Not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                SELLER_NOT_FOUND:
+                  $ref: "#/components/examples/seller_not_found"
+                PAYMENT_NOT_FOUND:
+                  $ref: "#/components/examples/payment_does_not_exist"
+        "422":
+          description: "Unprocessable entity.\n\nPotential business error."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                REFUND_CANCELLED_AND_MODE_MANUAL:
+                  $ref: "#/components/examples/refund_cancelled_and_mode_manual"
+                REFUND_DENIED_AND_MODE_MANUAL:
+                  $ref: "#/components/examples/refund_denied_and_mode_manual"
+                REFUND_AUTHORIZED_AND_MODE_MANUAL:
+                  $ref: "#/components/examples/refund_authorized_and_mode_manual"
+                INVALID_REFUND_AMOUNT:
+                  $ref: "#/components/examples/invalid_refund_amount"
+                REFUND_ALREADY_COMPLETED:
+                  $ref: "#/components/examples/refund_already_completed"
+        "500":
+          description: "Internal server error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InternalServerError"
+  /:
+    post:
+      security:
+        - basicAuth: []
+      tags:
+        - Webhook
+      summary: "Sends authorization data."
+      description: "It sends the authorization data, containing the details of the payment intent that originated it, to the endpoint preconfigured by the merchant.\n\nThis request will be sent to your address, protected by `Authorization: Basic` authentication.\n\nThe webhook must validate the 'Authorization' header to ensure that the credentials received are valid.\nThe format for assembling the hash sent is as follows: Basic { base64(user:password) }.\n\nThe user and password fields contain the values entered in the Web Checkout Webhook configuration.\n\n**For example**, for the user *'testwebhook'* and the password *'testwebhook13579'* the string would look like this: *Basic { base64(testwebhook:testwebhook13579) }*, generating an output in this format: *Basic dGVzdHdlYmhvb2s6dGVzdHdlYmhvb2sxMzU3OQ==*"
+      operationId: postWebhookAuthorization
+      requestBody:
+        description: "When a payment intention is authorized or denied in the Checkout, the system will send a **REST** request of the **POST** type to the **previously configured URL**.\n\nThe webhook URL and authentication must be configured in the Merchant Portal interface. <a href='#'>More details</a>\n\n**Reconciliation** of the authorization data received via this request can be done using the `order_id` field entered when creating the payment intent or the `payment_intent_id` field itself if you have chosen to persist it in your database.\n\nThe authorization data can be obtained from the `payment` object, where:\n- `method` will be the payment method selected by the shopper;\n- `amount` will be the amount authorized by the merchant;\n- `installment` will contain the number of installments and plan chosen, when applicable;\n- `result` will contain the authorization data:\n  - `status` Authorized|Denied;\n  - `authorization_code` authorization code with the card brand;\n  - `transaction_datetime` date and time the attempt/authorization was processed;\n  - `return_message` will contain the error message in case of a denied transaction.\n\nYou can also get some data captured from the device used by the shopper for the payment in the `frontend` object."
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookRequest"
+            examples:
+              Authorized:
+                $ref: '#/components/examples/WebhookAuthorized'
+              Denied:
+                $ref: '#/components/examples/WebhookDenied'
+      responses:
+        "200":
+          description: A status of 200 means that the webhook has been successfully received and no further delivery attempts will be made.              
+components:
+  securitySchemes:
+    PROD:
+      type: "oauth2"
+      flows:
+        clientCredentials:
+          tokenUrl: "https://api.globalgetnet.com/authentication/oauth2/access_token"
+          scopes:
+            digital-payments:checkout:custom:rw: "Creates, updates, or deletes resources using the API"
+            digital-payments:checkout:custom:r: "Retrieves resource details"
+    PRE:
+      type: "oauth2"
+      flows:
+        clientCredentials:
+          tokenUrl: "https://api-pre.globalgetnet.com/authentication/oauth2/access_token"
+          scopes:
+            digital-payments:checkout:custom:rw: "Creates, updates, or deletes resources using the API"
+            digital-payments:checkout:custom:r: "Retrieves resource details"
+    basicAuth:
+      type: http
+      scheme: basic          
+  parameters:
+    PaymentId:
+      name: payment_id
+      in: path
+      description: "Payment ID to be used in the query"
+      required: true
+      style: simple
+      explode: false
+      example: "44c1206c-fcfc-11ea-adc1-0242ac120002"
+      schema:
+        type: string
+        format: uuid
+  examples:
+      basicAuthExample:
+        value: |
+          Cabeçalho "Authorization: Basic dGVzdHdlYmhvb2s6dGVzdHdlYmhvb2sxMzU3OQ=="
+          onde "testwebhook" é o usuário e "testwebhook13579" é a senha, concatenados
+          e codificados em Base64.
+      WebhookAuthorized:
+        summary: Example of an AUTHORIZED transaction payload
+        value:
+          payment_intent_id: 1f9f47ed-65cc-4fbf-a407-0f17df9a2e2c
+          checkout_id: 5ab15d1e-ea8b-4560-84d2-fb3d02179537
+          order_id: YOUR_ORDER_ID
+          mode: instant
+          seller:
+            id: 716d899e-9091-4577-a12f-8a77ec4d1e0b
+            trade_name: GetNet Shop
+            merchant_document: '00000000000'
+            settings:
+              notification_url_configured: true
+          customer:
+            customer_id: c129d793-d204-4610-8819-b8fb720a8552
+            first_name: John
+            last_name: Doe
+            name: John Doe
+            email: johndoe@emailtest.com
+            document_type: dni
+            document_number: '1111111111111'
+            checked_email: false
+            billing_address:
+              street: South Rockledge St
+              number: '00'
+              complement: Rockville
+              country: AR
+              postal_code: '00000000'
+          shipping:
+            first_name: John
+            last_name: Doe
+            name: John Doe
+            address:
+              street: South Rockledge St
+              number: '00'
+              complement: Rockville
+              country: AR
+              postal_code: '00000000'
+          payment:
+            method: credit
+            amount: 14100
+            currency: ARS
+            installment:
+              quote_id: f054ce63-0475-406f-8eca-25aea5dae6a8
+              schema: plan_name
+              type: with_interest
+              number: 6
+            payment_method:
+              token_id: e327bae6-286e-4920-addb-5f4b10315b4e
+            result:
+              payment_id: 3a76acae-d9c0-421c-91e0-cf5ce8aca098
+              status: Authorized
+              authorization_code: '999999'
+              transaction_datetime: '2024-01-01T12:00:00.000Z'
+          pickup_store: false
+          product:
+          - product_type: cash_carry
+            title: Look Fashion Leather Boot
+            value: 5300
+            quantity: 1
+          - product_type: cash_carry
+            title: Look Fashion Blazer
+            value: 8800
+            quantity: 1
+          frontend:
+            link: https://www.globalgetnet.com/
+            time_page: 39
+            sales_channel: WEB
+            application_version: 0.0.0
+            card_pasted: true
+            ip: 000.000.00.00
+            timezone: America/Sao_Paulo
+            locale: en-US
+          created_at: '2024-01-01T12:00:00.000Z'
+          updated_at: '2024-01-01T12:00:00.000Z'
+      WebhookDenied:
+        summary: Example of a DENIED transaction payload
+        value:
+          payment_intent_id: 1f9f47ed-65cc-4fbf-a407-0f17df9a2e2c
+          checkout_id: 5ab15d1e-ea8b-4560-84d2-fb3d02179537
+          order_id: YOUR_ORDER_ID
+          mode: instant
+          seller:
+            id: 716d899e-9091-4577-a12f-8a77ec4d1e0b
+            trade_name: GetNet Shop
+            merchant_document: '00000000000'
+            settings:
+              notification_url_configured: true
+          customer:
+            customer_id: c129d793-d204-4610-8819-b8fb720a8552
+            first_name: John
+            last_name: Doe
+            name: John Doe
+            email: johndoe@emailtest.com
+            document_type: dni
+            document_number: '1111111111111'
+            checked_email: false
+            billing_address:
+              street: South Rockledge St
+              number: '00'
+              complement: Rockville
+              country: AR
+              postal_code: '00000000'
+          shipping:
+            first_name: John
+            last_name: Doe
+            name: John Doe
+            address:
+              street: South Rockledge St
+              number: '00'
+              complement: Rockville
+              country: AR
+              postal_code: '00000000'
+          payment:
+            method: credit
+            amount: 14100
+            currency: ARS
+            installment:
+              quote_id: f054ce63-0475-406f-8eca-25aea5dae6a8
+              schema: plan_name
+              type: with_interest
+              number: 6
+            payment_method:
+              token_id: e327bae6-286e-4920-addb-5f4b10315b4e
+            result:
+              payment_id: 3a76acae-d9c0-421c-91e0-cf5ce8aca098
+              status: Denied
+              return_message: Card not accepted for this operation
+              transaction_datetime: '2024-01-01T12:00:00.000Z'
+          pickup_store: false
+          product:
+          - product_type: cash_carry
+            title: Look Fashion Leather Boot
+            value: 5300
+            quantity: 1
+          - product_type: cash_carry
+            title: Look Fashion Blazer
+            value: 8800
+            quantity: 1
+          frontend:
+            link: https://www.globalgetnet.com/
+            time_page: 39
+            sales_channel: WEB
+            application_version: 0.0.0
+            card_pasted: true
+            ip: 000.000.00.00
+            timezone: America/Sao_Paulo
+            locale: en-US
+          created_at: '2024-01-01T12:00:00.000Z'
+          updated_at: '2024-01-01T12:00:00.000Z'
+      invalid_api_key:
+        value: Invalid API Key
+      invalid_api_token:
+        value: Invalid Token
+      seller_not_found:
+        value:
+          code: seller_not_found
+          message: Seller not found
+          details: []
+      payment_does_not_exist:
+        value:
+          code: payment_does_not_exist
+          message: Payment does not exist
+          details: []
+      cancelling_when_status_denied:
+        value:
+          code: invalid_status
+          message: It's not possible to cancel a payment with status Denied
+          details: []
+      cancelling_when_status_cancelled:
+        value:
+          code: invalid_status
+          message: It's not possible to cancel a payment with status Cancelled
+          details: []
+      refund_cancelled_and_mode_manual:
+        value:
+          code: invalid_status
+          message: It's not possible to refund a payment with status Cancelled and capture_mode manual
+          details: []
+      refund_denied_and_mode_manual:
+        value:
+          code: invalid_status
+          message: It's not possible to refund a payment with status Denied and capture_mode manual
+          details: []
+      refund_authorized_and_mode_manual:
+        value:
+          code: invalid_status
+          message: It's not possible to refund a payment with status Authorized and capture_mode manual
+          details: []
+      invalid_refund_amount:
+        value:
+          code: invalid_refund_amount
+          message: The amount must be less than or equal to the original amount
+          details: []
+      refund_already_completed:
+        value:
+          code: refund_already_completed
+          message: The refund has already been completed
+          details: []
+      checkout_product_not_enabled:
+        value:
+          code: product_is_not_enabled
+          message: Checkout product not enabled
+          details: []
+      amount_value_invalid:
+        value:
+          code: business_error
+          message: Amount value must be greater than zero.
+          details: []
+      checkout_configuration_not_found:
+        value:
+          code: checkout_configuration_not_found
+          message: Checkout configuration not found.
+          details: []
+      currency_not_allowed:
+        value:
+          code: currency_not_allowed
+          message: Currency not allowed
+          details: []
+  schemas:
+    WebhookRequest:
+      type: object
+      description: Data structure containing checkout payment details
+      required:
+        - checkout_id
+        - mode
+        - payment
+      properties:     
+        checkout_id:
+          type: string
+          format: uuidv4
+          description: Unique checkout ID
+          example: ee0b7dd5-92da-4ef4-ad3b-0ba369ad0efe
+        payment_intent_id:
+          type: string
+          format: uuidv4
+          description: Unique payment intent ID
+          example: a4fb9559-09f3-43ac-8ba5-c0d786506ea9
+        order_id:
+          type: string
+          description: "Order ID used for Merchant reconciliation"
+          pattern: ^[A-Za-z0-9-_]+$
+          maxLength: 36
+          example: "ORDER_123"
+        mode:
+          type: string
+          enum:
+            - instant
+            - payment_link
+            - recurring
+          description: "Checkout mode.\n\nThe possible values are:\n- instant = Instant payments are accepted\n- payment_link = One-time payments from a payment link are accepted \n - recurring = Recurring payments from recurring transaction ar accepted"
+          example: instant
+        seller:
+          $ref: '#/components/schemas/Seller'
+        customer:
+          $ref: '#/components/schemas/Customer'
+        shipping:
+          $ref: '#/components/schemas/Shipping'
+        payment:
+          $ref: '#/components/schemas/Payment'
+        frontend:
+          $ref: '#/components/schemas/Frontend'
+        pickup_store:
+          type: boolean
+          example: true
+          default: false
+        shipping_method:
+          type: string
+          example: PAC
+          description: Type of shipping o products
+        soft_descriptor:
+          type: string
+          description: "Payment description that appears on the customer's receipt"
+          example: "Bread Store"
+        reference_code:
+          type: string
+          description: "Payment reference code"
+          example: "Payment for the service provided by John"
+        product:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product_item'
+        device_fingerprint:
+          type: string
+          example: 7C5C38C6424F6EB7FC6DB1285A84DDAEAD559492A0FD04FCC919CAB6782CB3EF
+    Seller:
+      type: object
+      description: Data structure containing seller details
+      required:
+        - reference
+      properties:
+        id:
+          type: string
+          format: uuidv4
+          description: Seller ID
+          example: 06f256c8-1bbf-42bf-93b4-ce2041bfb87e
+        trade_name:
+          type: string
+          description: Trade or brand name of the seller's business
+          example: John Doe Bread Store
+        merchant_document:
+          type: string
+          description: 
+            Merchant document.
+          example: 599d037634
+        settings:
+          $ref: '#/components/schemas/SellerSettings'
+    SellerSettings:
+      type: object
+      description: Data structure containing seller settings
+      properties:
+        notification_url_configured:
+          type: boolean
+          description: "Whether the seller has configured a payment URL notification.\n\n #### The possible values are:\n\n - true = Seller is notified through the backend system when the payment transaction is processed\n - false = Seller is not notified through the backend system when the payment transaction is processed"
+          default: false
+    Payment:
+      type: object
+      description: Data structure containing payment details
+      required:
+        - amount
+        - currency
+        - result
+      properties:
+        method:
+          type: string
+          enum:
+            - credit
+            - debit
+          description: "
+            Payment method.
+
+            The possible values are:
+            - credit = Payment by credit card
+            - debit = Payment by debit card"
+          example: credit
+        amount:
+          type: integer
+          format: int32
+          minimum: 1
+          description: 
+            "Payment amount from checkout,in integer format, where the last 2 digits represent the cents.\n\nFor countries where cents do not apply, fill in the amount with 2 zeros to the right.\n\nEx: $150, send `15000`"
+          example: 10000
+        currency:
+          type: string
+          format: ISO-4217
+          description: "Currency code.\n\n The value is in the alpha-3 format defined in ISO 4217\n\n (https://www.iso.org/iso-4217-currency-codes.html)."
+          example: USD
+        installment:
+          $ref: '#/components/schemas/Installment'
+        result:
+          $ref: '#/components/schemas/PaymentResult'
+    Installment:
+      type: object
+      description: "Data structure containing installment details."
+      required:
+        - number
+        - type
+      properties:
+        type:
+          type: string
+          description: 
+            Installment type offered to the customer, defining whether interest
+            is charged for the installments
+          enum:
+            - no_interest
+            - with_interest
+          example: no_interest
+        number:
+          type: integer
+          description: Number of installments selected to the customer
+          example: 3
+        quote_id:
+          type: string
+          format: uuidv4
+          description: Quote ID
+          example: 500d2fd5-04d2-496e-b29e-7c6cfc3e97f9
+        schema:
+          type: string
+          description: Installment acquirer schema.
+    PaymentResult:
+      type: object
+      description: Data structure containing payment result details
+      required:
+        - status
+      properties:
+        payment_id:
+          type: string
+          format: uuidv4
+          description: Unique payment ID
+          example: ee0b7dd5-92da-4ef4-ad3b-0ba369ad0efe
+        status:
+          type: string
+          description: Payment transaction status
+          enum:
+            - Authorized
+            - Denied
+          example: Authorized
+        authorization_code:
+          type: string
+          description: Authorized payment transaction code
+          example: 000009999
+        transaction_datetime:
+          type: string
+          description: Date of payment transaction
+          example: "1997-07-16T19:20:30.45+01:00"
+        return_message:
+          type: string
+          description: 
+            Result message for the payment transaction. For a list of possible
+            values, <a href='#'>see</a>.
+          example: The payment type is not active
+        return_code:
+          type: string
+          description: 
+            Result code for the payment transaction. For a list of possible
+            values, see <LINK>.
+          example: payment_type_is_not_active
+    Frontend:
+      type: object
+      required:
+        - sales_channel
+        - application_version
+        - ip
+      properties:
+        link:
+          type: string
+          description: Origin of a request frontend
+          example: www.myhomepage.com/checkout
+        time_page:
+          description: Time page in seconds
+          type: integer
+          example: 30
+          minimum: -9223372036854776000
+          maximum: 9223372036854776000
+        sales_channel:
+          type: string
+          description: Time page um seconds
+          enum:
+            - WEB
+            - MOBILE
+            - ANDROID
+            - IOS
+        application_version:
+          type: string
+          description: Version o front end application
+          example: v1.0.0.1
+        card_pasted:
+          type: boolean
+          description: Describes when the card is pasted in frontend or not
+          default: false
+          example: false
+        ip:
+          type: string
+          description: Consumer device ip
+          example: 255.255.255.255
+        timezone: 
+          type: string 
+          description: Consumer timezone 
+          example: America/Argentina/Buenos_Aires 
+        locale: 
+          type: string 
+          description: Consumer locale 
+          example: es-AR
+    
+    RequestCPRefund:
+      description: "Data structure containing request details for refunding a payment"
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: integer
+          description: "Refund amount in integer format, where the last 2 digits represent the cents.\n\nFor countries where cents do not apply, fill in the amount with 2 zeros to the right.\n\nEx: $150, send `15000`"
+          format: int32
+          example: 100
+    PaymentResponseCancellation:
+     type: object
+     description: "Response to a request to cancel a payment transaction"
+     properties:
+       payment_id:
+         $ref: '#/components/schemas/Payment_id'
+       generated_by:
+        type: string
+        format: uuid
+        description: "Payment ID of the new cancellation payment created by the cancellation process"
+        example: 77d2306c-fcfc-11ea-adc1-0242ac120003
+       status:
+        $ref: '#/components/schemas/StatusTransactionCancellation'
+       transaction_datetime:
+         type: string
+         description: "Date and time of the cancellation transaction.\n\nThe value uses the data format defined in ISO 8601 and expressed in UTC time:\n\n'YYYY-MM-DDThh:mm:ss.sssZ'"
+         example: "1997-07-16T19:20:30.45+01:00"
+       authorization_code:
+          type: string
+          description: "Code returned from the card brand"
+          example: "840358"
+    StatusTransactionCancellation:
+      type: string
+      description: "Status of the transaction.\n\nThe possible values are:\n- Cancelled = Transaction is cancelled by the merchant or by a dispute. Applies only to transactions that have been authorized and captured.\n- Refunded = Transaction is refunded. Applies only to transactions that have been authorized and captured."
+      enum:
+        - Refunded
+        - Cancelled
+      example: Cancelled
+    Shipping:
+      type: object
+      description: "Data structure containing shipping details"
+      required:
+        - first_name
+        - last_name
+        - address
+      properties:
+        first_name:
+          type: string
+          description: Customer's first name
+          maxLength: 40
+          example: John
+        last_name:
+          type: string
+          description: Customer's last name
+          maxLength: 80
+          example: Doe Smith
+        name:
+          type: string
+          description: Customer's full name
+          maxLength: 100
+          example: John Doe Smith
+        phone_number:
+          type: string
+          description: Customer's phone number
+          maxLength: 15
+          example: '5551999887766'
+        shipping_amount:
+          type: number
+          description: "Shipping cost in integer format, where the last 2 digits represent the cents.\n\nFor countries where cents do not apply, fill in the amount with 2 zeros to the right.\n\nEx: $150, send `15000`"
+          example: 3000
+        address:
+          $ref: '#/components/schemas/Address'
+    Address:
+          type: object
+          description: "Data structure containing shipping address details"
+          required:
+            - street
+            - number
+            - country
+            - postal_code
+          properties:
+            street:
+              type: string
+              description: "Name of a street or thoroughfare"
+              maxLength: 60
+              example: Av. Brasil
+            number:
+              type: string
+              description: "Number that identifies the position of a building on a street"
+              maxLength: 10
+              example: '1000'
+            complement:
+              type: string
+              description: "Additional address information"
+              maxLength: 60
+              example: Sala 1
+            district:
+              type: string
+              description: "Name of a district, for example, a part of a town or region"
+              maxLength: 40
+              example: São Geraldo
+            city:
+              type: string
+              description: "Name of a built-up area with defined boundaries and a local government.\n\nThe value is based on the ISO 3166-2, according to the country defined within the address details."
+              maxLength: 40
+              example: Porto Alegre
+            state:
+              type: string
+              description: "Name of an organized political community or area forming a part of a federation.\n\nThe value is based on the ISO 3166-2, according to the country defined within the address details."
+              maxLength: 20
+              example: RS
+            country:
+              type: string
+              description: "Country code.\n\nThe value is based on the ISO 3166-1 alpha-2 (https://www.iso.org/obp/ui/#search/code/)."
+              maxLength: 2
+              example: BR
+            postal_code:
+              type: string
+              description: "Postal or ZIP code.\n\nThe value consists of a group of letters and/or numbers that is added to a postal address to assist in sorting the mail."
+              maxLength: 8
+              example: '90230060'
+            reference:
+              type: string
+              description: "Reference point details that can be used to help locate the address"
+              maxLength: 80
+              example: 'Near the hospital'
+    Customer:
+      type: object
+      description: "Data structure containing customer details"
+      required:
+        - customer_id
+        - first_name
+        - last_name
+        - name
+        - email
+        - document_type
+        - document_number
+        - billing_address
+      properties:
+        customer_id:
+          type: string
+          description: "Customer ID"
+          example: customer_21081826
+          maxLength: 100
+        first_name:
+          type: string
+          description: "Customer's first name"
+          maxLength: 40
+          example: John
+        last_name:
+          type: string
+          description: "Customer's last name"
+          maxLength: 80
+          example: Doe Smith
+        name:
+          type: string
+          description: "Customer's full name"
+          maxLength: 100
+          example: John Doe Smith
+        email:
+          type: string
+          description: "Customer's email address"
+          format: email
+          example: customer@email.com.br
+        document_type:
+          type: string
+          description: "Type of the document used to identify the customer"
+          maxLength: 26
+          example: CPF
+        document_number:
+          type: string
+          description: "Document number used to identify the customer"
+          minLength: 8
+          maxLength: 15
+          example: '12345678912'
+        phone_number:
+          type: string
+          description: "Customer's phone number"
+          maxLength: 15
+          example: '5551999887766'
+        gender:
+          type: string
+          description: "Customer's gender"
+          example: Male
+          enum:
+            - Female
+            - Male
+            - Intersex
+            - Trans
+            - Non-Conforming
+            - Personal
+            - Eunuch
+        checked_email:
+          type: boolean
+          default: false
+          description: "Whether the customer's email address was verified by the seller when they registered with the store.\n\nThe possible values are:\n- true = Email address was verified\n- false = Email address was not verified"
+          example: false
+        billing_address:
+          $ref: '#/components/schemas/Address'
+    Error:
+      required:
+        - message
+      description: "Data structure containing the details for errors"
+      type: object
+      properties:
+        code:
+          type: string
+          description: "Unique alphanumeric human readable error code"
+          example: field_size_error
+        message:
+          type: string
+          description: "Brief summary of the reported issue"
+          example: "Size for field [name] must be between 10 and 50"
+        details:
+          type: array
+          items:
+            type: object
+          description: "Array of errors.\n\nThe object type varies depending on the error context."
+          example: '[ {"card_number": "card number is required"}]'
+    Product_item:
+      type: object
+      description: "Data structure containing product details"
+      required:
+        - title
+        - value
+        - quantity
+      properties:
+        product_type:
+          type: string
+          example: "digital_content"
+          description: "Product type"
+          enum:
+            - cash_carry
+            - digital_content
+            - digital_goods
+            - digital_physical
+            - gift_card
+            - physical_goods
+            - renew_subs
+            - shareware
+            - service
+        title:
+          type: string
+          example: Toy car
+          description: "Product name"
+          maxLength: 128
+        description:
+          type: string
+          example: Wooden toy car
+          description: "Product description"
+          maxLength: 1024
+        value:
+          type: integer
+          example: 1200
+          description: "Product value in integer format, where the last 2 digits represent the cents.\n\nFor countries where cents do not apply, fill in the amount with 2 zeros to the right.\n\nEx: $150, send `15000`"
+          minimum: 0
+          maximum: 9223372036854776000
+        quantity:
+          type: integer
+          example: 10
+          description: "Quantity of the product"
+          minimum: 0
+          maximum: 9223372036854776000
+    Payment_id:
+      format: uuid
+      type: string
+      readOnly: true
+      description: "Payment ID"
+      example: 06f256c8-1bbf-42bf-93b4-ce2041bfb87e
+    ResponseRefund:
+      type: object
+      description: "Response to a request to refund a payment"
+      properties:
+        payment_id:
+          description: "Payment ID of the original payment transaction"
+          allOf:
+            - $ref: '#/components/schemas/Payment_id'
+        authorization_code:
+          type: string
+          description: "Code returned from the card brand"
+          example: "840358"
+        status:
+          description: "Status of the transaction.\n\nThe value is 'Refunded', meaning that the transaction is refunded."
+          enum:
+            - Refunded
+          type: string
+          example: Refunded
+        transaction_datetime:
+          type: string
+          description: "Date and time of the transaction.\n\nThe value uses the data format defined in ISO 8601 and expressed in UTC time:\n\n'YYYY-MM-DDThh:mm:ss.sssZ'"
+          example: "1997-07-16T19:20:30.45+01:00"
+        generated_by:
+          type: string
+          format: uuid
+          description: "Payment ID of the new refunded payment created by the refund process"
+          example: 77d2306c-fcfc-11ea-adc1-0242ac120003
+    CreatePaymentIntentCheckout:
+      type: object
+      description: "Data structure containing payment intent details"
+      required:
+        - payment
+        - product
+        - customer
+      properties:
+        mode:
+          type: string
+          description: "Checkout mode.\n\nThe value is 'instant', meaning that instant payments are accepted."
+          default: instant
+          example: instant
+        order_id:
+          type: string
+          description: "Order ID used for Merchant reconciliation"
+          pattern: ^[A-Za-z0-9-_]+$
+          maxLength: 36
+          example: "ORDER_123"
+        payment:
+          type: object
+          description: "Data structure containing payment details"
+          required:
+            - amount
+            - currency
+          properties:
+            currency:
+              type: string
+              format: ISO-4217
+              description: "Currency code.\n\nThe value is in the alpha-3 format defined in ISO 4217 (https://www.iso.org/iso-4217-currency-codes.html)."
+              example: USD
+            amount:
+              type: integer
+              description: "Purchase amount in integer format, where the last 2 digits represent the cents.\n\nFor countries where cents do not apply, fill in the amount with 2 zeros to the right.\n\nEx: $150, send `15000`."
+              example: 12000
+        product:
+          type: array
+          description: "Array of products included in the order"
+          items:
+            $ref: '#/components/schemas/Product_item'
+        customer:
+          $ref: '#/components/schemas/Customer'
+        shipping:
+          $ref: '#/components/schemas/Shipping'
+        pickup_store:
+          type: boolean
+          description: "Whether the order is to be picked up by the customer"
+          example: true
+          default: false
+        shipping_method:
+          type: string
+          example: PAC
+          description: "Shipping method of the order.\n\nThe value can be freely defined."
+    PaymentIntentResponseBody:
+      type: object
+      description: "Response to a request to create a payment intent"
+      required:
+        - payment_intent_id
+      properties:
+        payment_intent_id:
+          type: string
+          format: uuidv4
+          description: "Unique payment intent ID"
+          example: ee0b7dd5-92da-4ef4-ad3b-0ba369ad0efe
+    BadRequestError:
+      required:
+        - code
+        - message
+      description: "Data structure containing the details for bad request errors"
+      type: object
+      properties:
+        code:
+          type: string
+          description: "Unique alphanumeric human readable error code"
+          example: guid_error
+        message:
+          type: string
+          description: "Brief summary of the reported issue"
+          example: "x-seller-id must be a valid guid"
+        details:
+          type: array
+          items:
+            type: object
+          description: "Array of errors.\n\nThe object type varies depending on the error context."
+          example: '[ {"property": "x-seller-id", "constraint":"guid"}]'
+    InternalServerError:
+      required:
+        - message
+      description: "Data structure containing the details for internal server errors"
+      type: object
+      properties:
+        message:
+          type: string
+          description: "Brief summary of the reported issue"
+          example: "Internal Server Error"
+        details:
+          type: array
+          items:
+            type: object
+          description: "Array of errors.\n\nThe object type varies depending on the error context."
+          example: '[]'
+    UnauthorizedError:
+      type: string
+      description: "Brief summary of the reported issue"
+      example: "Invalid API Key"
